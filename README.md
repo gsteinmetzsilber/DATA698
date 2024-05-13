@@ -1,7 +1,7 @@
 # Grading Writing with a Large Language Model
 
 ## Overview
-In this project, I fine-tune Llama 3-8B-Instructe and evaluate its performance grading student essays. Specifically, the model was fine-tuned thrice:
+In this project, I fine-tune Llama 3-8B-Instruct and evaluate its performance grading student essays. Specifically, the model was fine-tuned thrice:
 1. Fine-tuned on persuasive essays
 2. Fine-tuned on source-dependent essays
 3. Fine-tuned on narrative essays
