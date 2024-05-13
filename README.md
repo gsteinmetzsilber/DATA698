@@ -15,17 +15,23 @@ The resultant files are here:
 
 ### Persuasive Model Files:
 Train: https://698modeldata.s3.us-east-2.amazonaws.com/train_persuasive_model_input.csv
+
 Evaluation: https://698modeldata.s3.us-east-2.amazonaws.com/eval_persuasive_model_input.csv
+
 Test: https://698modeldata.s3.us-east-2.amazonaws.com/test_persuasive_model_input.csv
 
 ### Source Dependent Model Files:
 Train: https://698modeldata.s3.us-east-2.amazonaws.com/train_source_dependent_model_input.csv
+
 Evaluation: https://698modeldata.s3.us-east-2.amazonaws.com/eval_source_dependent_model_input.csv
+
 Test: https://698modeldata.s3.us-east-2.amazonaws.com/test_source_dependent_model_input.csv
 
 ### Narrative Model Input Files:
 Train: https://698modeldata.s3.us-east-2.amazonaws.com/train_narrative_model_input.csv
+
 Evaluation: https://698modeldata.s3.us-east-2.amazonaws.com/eval_narrative_model_input.csv
+
 Test: https://698modeldata.s3.us-east-2.amazonaws.com/test_narrative_model_input.csv
 
 ## Models
