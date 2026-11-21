@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grade it yourself</title>
+<meta name="description" content="Score a student essay against the rubric, then compare your score with two human raters and a fine-tuned Llama 3.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%230b0b0b'/%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --wash: #f0efec;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6f6d68;
+  --rule: #e1e0d9;
+  --rule-strong: #c3c2b7;
+  --rater: #52514e;
+  --model: #eb6834;
+  --you: #2a78d6;
+  --serif: "Iowan Old Style", Charter, "Sitka Text", Cambria, Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --wash: #262624;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #9b9990;
+    --rule: #2c2c2a;
+    --rule-strong: #45453f;
+    --rater: #c3c2b7;
+    --model: #d95926;
+    --you: #3987e5;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 15px/1.5 var(--sans);
+}
+
+a { color: inherit; text-underline-offset: 3px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 10;
+  height: 3px;
+  background: var(--rule);
+}
+
+.progress-fill {
+  width: 0;
+  height: 100%;
+  background: var(--ink);
+  transition: width 0.3s ease;
+}
+
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.masthead {
+  padding: 56px 0 32px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.kicker {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0 0 16px;
+  font: 500 44px/1.1 var(--serif);
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  max-width: 36em;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 18px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 56px;
+  align-items: start;
+  padding: 40px 0 72px;
+}
+
+.sheet { max-width: 640px; }
+
+.assignment {
+  margin: 0 0 32px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.assignment summary {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.assignment summary::-webkit-details-marker { display: none; }
+
+.assignment summary::after {
+  content: "Show";
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.assignment[open] summary::after { content: "Hide"; }
+
+.assignment summary:focus-visible,
+.button:focus-visible,
+.link:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.assignment p {
+  margin: 0 16px 12px;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.assignment p:last-child { margin-bottom: 16px; }
+
+.essay {
+  margin: 0 0 24px;
+  font: 19px/1.7 var(--serif);
+  overflow-wrap: break-word;
+}
+
+.redacted {
+  color: var(--muted);
+  font: 600 0.68em/1 var(--sans);
+  letter-spacing: 0.04em;
+}
+
+.fine {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.closing-title {
+  margin: 0 0 20px;
+  font: 500 34px/1.15 var(--serif);
+}
+
+.closing-text {
+  margin: 0 0 16px;
+  color: var(--ink-2);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.actions .button { width: auto; }
+
+.panel {
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 40px);
+  margin: -4px;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.card {
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.card h2,
+.tally h3,
+.notes h2 {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font: 600 12px/1.2 var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.options {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.option {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.option:hover {
+  border-color: var(--rule-strong);
+  background: var(--wash);
+}
+
+.option:has(input:checked) {
+  border-color: var(--ink);
+  background: var(--wash);
+  font-weight: 600;
+}
+
+.option:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.keycap {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 600 13px/1 var(--sans);
+}
+
+.option:has(input:checked) .keycap {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.detail {
+  min-height: 186px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--wash);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.detail p { margin: 0; }
+
+.detail ul {
+  margin: 8px 0 0;
+  padding: 0 0 0 16px;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.detail:has(.fine) {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--rule);
+  background: none;
+  text-align: center;
+}
+
+.detail .fine { max-width: 24em; }
+
+.button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 22px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--page);
+  font: 600 15px/1 var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:hover { opacity: 0.86; }
+
+.button:disabled {
+  border-color: var(--wash);
+  background: var(--wash);
+  color: var(--muted);
+  opacity: 1;
+  cursor: default;
+}
+
+.button.secondary {
+  border-color: var(--rule-strong);
+  background: transparent;
+  color: var(--ink);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.result { animation: rise 0.24s ease-out; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+.plot {
+  width: 100%;
+  margin-bottom: 14px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.plot th,
+.plot td {
+  height: 34px;
+  padding: 0;
+  font-weight: 400;
+  text-align: center;
+}
+
+.plot thead th,
+.plot thead td {
+  height: 22px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plot .who {
+  width: 72px;
+  color: var(--ink-2);
+  font-size: 14px;
+  text-align: left;
+}
+
+.plot .value {
+  width: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.plot tbody tr:last-child .who {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.slot { position: relative; }
+
+.slot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--rule);
+}
+
+.mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.mark::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--rater);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.mark.model::after { background: var(--model); }
+
+.mark.you::after { background: var(--you); }
+
+.mark:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -3px;
+}
+
+.verdict {
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.tally {
+  margin-bottom: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.card > .tally:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.card > .tally:last-child { margin-bottom: 0; }
+
+.tally table {
+  width: 100%;
+  margin-bottom: 12px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.tally thead th {
+  width: 68px;
+  padding-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.tally tbody th {
+  padding: 6px 0 6px 16px;
+  font-weight: 400;
+  text-align: left;
+  text-indent: -16px;
+}
+
+.tally td {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tally tbody tr:first-child th,
+.tally tbody tr:first-child td { font-weight: 600; }
+
+.swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--rater);
+}
+
+.swatch.model { background: var(--model); }
+
+.swatch.you { background: var(--you); }
+
+.tooltip {
+  position: fixed;
+  z-index: 20;
+  max-width: 260px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--page);
+  font-size: 13px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.tooltip[hidden] { display: none; }
+
+.tooltip strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.notes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+  padding: 40px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.notes p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 20px 0 48px;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 920px) {
+  .masthead { padding: 40px 0 24px; }
+
+  h1 { font-size: 34px; }
+
+  .lede { font-size: 17px; }
+
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+    padding: 28px 0 56px;
+  }
+
+  .essay { font-size: 18px; }
+
+  .panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .notes {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result { animation: none; }
+
+  .progress-fill { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="progress" aria-hidden="true"><div class="progress-fill" id="progress"></div></div>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="kicker">Automated essay scoring</p>
+    <h1>Grade it yourself</h1>
+    <p class="lede">Read a student's essay and score it from 1 to 6 with the rubric the human raters used. Then see what two raters and a fine-tuned language model gave it.</p>
+  </header>
+
+  <main class="layout">
+    <article class="sheet" id="sheet"></article>
+    <aside class="panel" id="panel" aria-label="Scoring"></aside>
+  </main>
+
+  <section class="notes" aria-label="About this page">
+    <div>
+      <h2>The essays</h2>
+      <p>These <span data-fill="pool"></span> essays were drawn at random from the <span data-fill="total"></span> held-out test essays in set 1 of the ASAP automated essay scoring dataset (Hewlett Foundation, 2012). They are persuasive letters written by grade 8 students, and each was scored from 1 to 6 by two human raters.</p>
+    </div>
+    <div>
+      <h2>The model</h2>
+      <p>Llama 3 8B Instruct, fine-tuned with QLoRA on about 2,500 other persuasive essays from the same dataset. It was trained to predict each rater separately, and it gave both raters the same score on every one of the <span data-fill="total"></span> test essays, so it appears here once.</p>
+    </div>
+    <div>
+      <h2>The numbers</h2>
+      <p>Across all <span data-fill="total"></span> test essays the model matched a rater's exact score <span data-fill="model-exact"></span> of the time and was within one point <span data-fill="model-near"></span> of the time. The two raters matched each other <span data-fill="raters-exact"></span> and <span data-fill="raters-near"></span> of the time. Answering <span data-fill="constant-score"></span> for every essay would match <span data-fill="constant-exact"></span>. On quadratic weighted kappa, a chance-corrected measure that penalizes bigger misses more, the model scores <span data-fill="kappa-model-1"></span> and <span data-fill="kappa-model-2"></span> against the two raters, and the raters score <span data-fill="kappa-raters"></span> against each other. A handful of essays is too few to rank anyone, so treat your own tally as a game.</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span>Code, notebooks and model adapters are on <a href="https://github.com/gsteinmetzsilber/DATA698">GitHub</a>.</span>
+    <button class="link" type="button" id="reset">Reset my tally</button>
+  </footer>
+</div>
+
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+
+<noscript><p class="wrap">This page needs JavaScript to show the essays.</p></noscript>
+
+<script src="data.js"></script>
+<script>
+(() => {
+  const data = window.GRADING_DATA;
+  const sheet = document.getElementById("sheet");
+  const panel = document.getElementById("panel");
+  const tooltip = document.getElementById("tooltip");
+
+  if (!data) {
+    sheet.textContent = "The essay data did not load.";
+    return;
+  }
+
+  const STORAGE_KEY = "grade-it-yourself:v1";
+  const REPOSITORY = "https://github.com/gsteinmetzsilber/DATA698";
+  const TOKEN = /@[A-Z]+\d*/g;
+  const essays = new Map(data.essays.map((essay) => [essay.id, essay]));
+  const rubric = new Map(data.rubric.map((level) => [level.score, level]));
+
+  let session = loadSession();
+  let index = firstUngraded();
+  let revealed = false;
+  let assignmentOpen = index === 0;
+
+  function el(tag, attributes = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [name, value] of Object.entries(attributes)) {
+      if (value === false || value == null) continue;
+      if (name.startsWith("on")) node.addEventListener(name.slice(2), value);
+      else node.setAttribute(name, value === true ? "" : value);
+    }
+    node.append(...children.flat().filter((child) => child != null && child !== false));
+    return node;
+  }
+
+  function shuffled(items) {
+    const copy = [...items];
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+
+  function newSession() {
+    return { order: shuffled([...essays.keys()]), scores: {} };
+  }
+
+  function loadSession() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const order = saved?.order;
+      const intact =
+        Array.isArray(order) &&
+        order.length === essays.size &&
+        new Set(order).size === essays.size &&
+        order.every((id) => essays.has(id));
+      if (intact) {
+        const scores = Object.entries(saved.scores ?? {}).filter(
+          ([id, score]) => essays.has(Number(id)) && rubric.has(score),
+        );
+        return { order, scores: Object.fromEntries(scores) };
+      }
+    } catch {}
+    return newSession();
+  }
+
+  function saveSession() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    } catch {}
+  }
+
+  function firstUngraded() {
+    const at = session.order.findIndex((id) => !(id in session.scores));
+    return at === -1 ? session.order.length : at;
+  }
+
+  function finished() {
+    return index >= session.order.length;
+  }
+
+  function tally() {
+    const bucket = () => ({ exact: 0, near: 0, of: 0 });
+    const totals = { essays: 0, you: bucket(), model: bucket(), raters: bucket() };
+    const count = (into, first, second) => {
+      into.of += 1;
+      if (first === second) into.exact += 1;
+      if (Math.abs(first - second) <= 1) into.near += 1;
+    };
+    for (const id of session.order) {
+      const yours = session.scores[id];
+      if (yours === undefined) continue;
+      const essay = essays.get(id);
+      totals.essays += 1;
+      for (const rater of [essay.rater1, essay.rater2]) {
+        count(totals.you, yours, rater);
+        count(totals.model, essay.model, rater);
+      }
+      count(totals.raters, essay.rater1, essay.rater2);
+    }
+    return totals;
+  }
+
+  function percent(part, whole) {
+    return `${Math.round((100 * part) / whole)}%`;
+  }
+
+  function plural(count, noun) {
+    return `${count} ${noun}${count === 1 ? "" : "s"}`;
+  }
+
+  function essayBody(text) {
+    const body = el("p", { class: "essay" });
+    let cursor = 0;
+    for (const match of text.matchAll(TOKEN)) {
+      body.append(text.slice(cursor, match.index), el("span", { class: "redacted" }, match[0]));
+      cursor = match.index + match[0].length;
+    }
+    body.append(text.slice(cursor));
+    return body;
+  }
+
+  function assignment() {
+    const details = el(
+      "details",
+      { class: "assignment", open: assignmentOpen },
+      el("summary", {}, "The assignment"),
+      data.prompt.map((paragraph) => el("p", {}, paragraph)),
+    );
+    details.addEventListener("toggle", () => {
+      assignmentOpen = details.open;
+    });
+    return details;
+  }
+
+  function closing() {
+    const totals = tally();
+    const reference = data.reference;
+    return [
+      el("p", { class: "kicker" }, "Finished"),
+      el("h2", { class: "closing-title" }, `That was all ${session.order.length}.`),
+      el(
+        "p",
+        { class: "closing-text" },
+        `You matched a rater's exact score on ${totals.you.exact} of ${totals.you.of} comparisons. ` +
+          `The model matched on ${totals.model.exact} of ${totals.model.of}, and the two raters matched ` +
+          `each other on ${totals.raters.exact} of ${plural(totals.raters.of, "essay")}.`,
+      ),
+      el(
+        "p",
+        { class: "closing-text" },
+        `For a steadier comparison, across all ${reference.essays} test essays the model matched a rater exactly ` +
+          `${percent(reference.model.exact, reference.model.of)} of the time and the raters matched each other ` +
+          `${percent(reference.raters.exact, reference.raters.of)} of the time.`,
+      ),
+      el(
+        "div",
+        { class: "actions" },
+        el("button", { class: "button", type: "button", onclick: restart }, "Start over"),
+        el("a", { class: "button secondary", href: REPOSITORY }, "View the project"),
+      ),
+    ];
+  }
+
+  function renderSheet() {
+    if (finished()) {
+      sheet.replaceChildren(...closing());
+      return;
+    }
+    const essay = essays.get(session.order[index]);
+    sheet.replaceChildren(
+      el("p", { class: "kicker" }, `Essay ${index + 1} of ${session.order.length} · Grade 8 · ${essay.words} words`),
+      assignment(),
+      essayBody(essay.text),
+      el(
+        "p",
+        { class: "fine" },
+        "Words like @CAPS1 stand in for names, places and numbers scrubbed from the dataset. " +
+          "The scrubbing was automatic and sometimes catches ordinary words, such as “may” becoming @MONTH1.",
+      ),
+    );
+  }
+
+  function chooser() {
+    const submit = el("button", { class: "button", type: "submit", disabled: true }, "Lock in score");
+    const detail = el("div", { class: "detail" });
+    const describe = (level) => {
+      if (level) {
+        detail.replaceChildren(
+          el("p", {}, level.summary),
+          el("ul", {}, level.elements.map((item) => el("li", {}, item))),
+        );
+      } else {
+        detail.replaceChildren(
+          el("p", { class: "fine" }, "Pick a score to read what it means. Keys 1 to 6 work too, and Enter locks it in."),
+        );
+      }
+    };
+    const form = el(
+      "form",
+      {
+        class: "card",
+        onsubmit: (event) => {
+          event.preventDefault();
+          const chosen = form.elements.score.value;
+          if (chosen) reveal(Number(chosen));
+        },
+      },
+      el("h2", { id: "score-title" }, "Your score"),
+      el(
+        "div",
+        {
+          class: "options",
+          role: "radiogroup",
+          "aria-labelledby": "score-title",
+          onmouseleave: () => describe(rubric.get(Number(form.elements.score.value))),
+        },
+        data.rubric.map((level) =>
+          el(
+            "label",
+            { class: "option", onmouseenter: () => describe(level) },
+            el("input", {
+              class: "sr-only",
+              type: "radio",
+              name: "score",
+              value: String(level.score),
+              onchange: () => {
+                submit.disabled = false;
+                describe(level);
+              },
+            }),
+            el("span", { class: "keycap", "aria-hidden": "true" }, String(level.score)),
+            el("span", { class: "sr-only" }, `${level.score}. `),
+            level.label,
+            el("span", { class: "sr-only" }, `. ${level.summary}`),
+          ),
+        ),
+      ),
+      detail,
+      submit,
+    );
+    describe();
+    return form;
+  }
+
+  function compare(subject, verb, score, essay) {
+    const raters = [essay.rater1, essay.rater2];
+    const matches = raters.filter((rater) => rater === score).length;
+    if (matches === 2) return `${subject} matched both raters.`;
+    if (matches === 1) return `${subject} matched Rater ${raters.indexOf(score) + 1}.`;
+    const gap = Math.min(...raters.map((rater) => Math.abs(rater - score)));
+    const target = essay.rater1 === essay.rater2 ? "both raters" : "the nearest rater";
+    return `${subject} ${verb} ${plural(gap, "point")} off ${target}.`;
+  }
+
+  function verdict(essay, yours) {
+    const sentences = [];
+    if (essay.rater1 !== essay.rater2) sentences.push(`The raters split, ${essay.rater1} and ${essay.rater2}.`);
+    sentences.push(compare("You", "were", yours, essay), compare("The model", "was", essay.model, essay));
+    return sentences.join(" ");
+  }
+
+  function mark(row) {
+    return el("span", {
+      class: `mark ${row.kind}`,
+      tabindex: "0",
+      role: "img",
+      "aria-label": `${row.who}: ${row.score}. ${rubric.get(row.score).summary}`,
+      "data-who": row.who,
+      "data-score": String(row.score),
+    });
+  }
+
+  function scorePlot(essay, yours) {
+    const rows = [
+      { who: "Rater 1", kind: "rater", score: essay.rater1 },
+      { who: "Rater 2", kind: "rater", score: essay.rater2 },
+      { who: "Model", kind: "model", score: essay.model },
+      { who: "You", kind: "you", score: yours },
+    ];
+    return el(
+      "table",
+      { class: "plot" },
+      el("caption", { class: "sr-only" }, "Scores given to this essay"),
+      el(
+        "thead",
+        {},
+        el(
+          "tr",
+          {},
+          el("td", { class: "who" }),
+          data.rubric.map((level) => el("th", { scope: "col" }, String(level.score))),
+          el("th", { class: "value", scope: "col" }, el("span", { class: "sr-only" }, "Score")),
+        ),
+      ),
+      el(
+        "tbody",
+        {},
+        rows.map((row) =>
+          el(
+            "tr",
+            {},
+            el("th", { class: "who", scope: "row" }, row.who),
+            data.rubric.map((level) => el("td", { class: "slot" }, level.score === row.score && mark(row))),
+            el("td", { class: "value" }, String(row.score)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  function tallyTable() {
+    const totals = tally();
+    const cell = (bucket, key) => el("td", {}, bucket.of ? `${bucket[key]} / ${bucket.of}` : "–");
+    const row = (kind, label, bucket) =>
+      el(
+        "tr",
+        {},
+        el("th", { scope: "row" }, el("span", { class: `swatch ${kind}`, "aria-hidden": "true" }), label),
+        cell(bucket, "exact"),
+        cell(bucket, "near"),
+      );
+    return el(
+      "div",
+      { class: "tally" },
+      el("h3", {}, `Tally after ${plural(totals.essays, "essay")}`),
+      el(
+        "table",
+        {},
+        el(
+          "thead",
+          {},
+          el("tr", {}, el("td", {}), el("th", { scope: "col" }, "Exact"), el("th", { scope: "col" }, "Within 1")),
+        ),
+        el(
+          "tbody",
+          {},
+          row("you", "You vs the raters", totals.you),
+          row("model", "Model vs the raters", totals.model),
+          row("rater", "Raters vs each other", totals.raters),
+        ),
+      ),
+      el("p", { class: "fine" }, "You and the model are each compared with both raters, so every essay counts twice."),
+    );
+  }
+
+  function result() {
+    const essay = essays.get(session.order[index]);
+    const yours = session.scores[essay.id];
+    const last = index === session.order.length - 1;
+    return el(
+      "section",
+      { class: "card result" },
+      el("h2", {}, "The scores"),
+      scorePlot(essay, yours),
+      el("p", { class: "verdict", id: "verdict" }, verdict(essay, yours)),
+      tallyTable(),
+      el(
+        "button",
+        { class: "button", type: "button", "aria-describedby": "verdict", onclick: next },
+        last ? "See the summary" : "Next essay",
+      ),
+    );
+  }
+
+  function renderPanel() {
+    hideTip();
+    if (finished()) panel.replaceChildren(el("section", { class: "card" }, tallyTable()));
+    else panel.replaceChildren(revealed ? result() : chooser());
+  }
+
+  function renderProgress() {
+    const graded = Object.keys(session.scores).length;
+    document.getElementById("progress").style.width = percent(graded, session.order.length);
+  }
+
+  function render() {
+    renderSheet();
+    renderPanel();
+    renderProgress();
+  }
+
+  function scrollToSheet() {
+    window.scrollTo({ top: Math.max(0, sheet.getBoundingClientRect().top + window.scrollY - 24) });
+  }
+
+  function reveal(score) {
+    session.scores[session.order[index]] = score;
+    saveSession();
+    revealed = true;
+    renderPanel();
+    renderProgress();
+    panel.querySelector(".button").focus({ preventScroll: true });
+  }
+
+  function next() {
+    if (index === 0) assignmentOpen = false;
+    index += 1;
+    revealed = false;
+    render();
+    scrollToSheet();
+  }
+
+  function restart() {
+    session = newSession();
+    saveSession();
+    index = 0;
+    revealed = false;
+    assignmentOpen = true;
+    render();
+    scrollToSheet();
+  }
+
+  function showTip(target) {
+    const score = Number(target.dataset.score);
+    tooltip.replaceChildren(
+      el("strong", {}, `${target.dataset.who} · ${score}`),
+      rubric.get(score).summary,
+    );
+    tooltip.hidden = false;
+    const anchor = target.getBoundingClientRect();
+    const box = tooltip.getBoundingClientRect();
+    const left = anchor.left + anchor.width / 2 - box.width / 2;
+    const above = anchor.top - box.height - 6;
+    tooltip.style.left = `${Math.min(Math.max(8, left), window.innerWidth - box.width - 8)}px`;
+    tooltip.style.top = `${above < 8 ? anchor.bottom + 6 : above}px`;
+  }
+
+  function hideTip() {
+    tooltip.hidden = true;
+  }
+
+  function fillNotes() {
+    const { model, raters, constant, kappa, essays: total } = data.reference;
+    const fills = {
+      pool: data.essays.length,
+      total,
+      "model-exact": percent(model.exact, model.of),
+      "model-near": percent(model.within_one, model.of),
+      "raters-exact": percent(raters.exact, raters.of),
+      "raters-near": percent(raters.within_one, raters.of),
+      "constant-score": constant.score,
+      "constant-exact": percent(constant.exact, constant.of),
+      "kappa-model-1": kappa.model_rater1.toFixed(2),
+      "kappa-model-2": kappa.model_rater2.toFixed(2),
+      "kappa-raters": kappa.raters.toFixed(2),
+    };
+    for (const node of document.querySelectorAll("[data-fill]")) node.textContent = fills[node.dataset.fill];
+  }
+
+  panel.addEventListener("mouseover", (event) => {
+    const target = event.target.closest(".mark");
+    if (target) showTip(target);
+  });
+  panel.addEventListener("mouseout", (event) => {
+    if (event.target.closest(".mark")) hideTip();
+  });
+  panel.addEventListener("focusin", (event) => {
+    const target = event.target.closest(".mark");
+    if (target) showTip(target);
+  });
+  panel.addEventListener("focusout", hideTip);
+  window.addEventListener("scroll", hideTip, { passive: true, capture: true });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") hideTip();
+    if (revealed || finished() || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === "Enter" && event.target.matches?.('input[name="score"]')) {
+      event.preventDefault();
+      event.target.form.requestSubmit();
+      return;
+    }
+    if (event.key.length !== 1 || !rubric.has(Number(event.key))) return;
+    const input = panel.querySelector(`input[name="score"][value="${event.key}"]`);
+    if (!input) return;
+    input.checked = true;
+    input.dispatchEvent(new Event("change"));
+    input.focus({ preventScroll: true });
+  });
+
+  document.getElementById("reset").addEventListener("click", restart);
+
+  fillNotes();
+  render();
+})();
+</script>
+</body>
+</html>
